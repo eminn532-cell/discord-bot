@@ -391,4 +391,4 @@ async def admin_hata(ctx, error):
         await ctx.message.delete()
 
 # --- BOTU ÇALIŞTIR ---
-bot.run('')
+bot.run(os.getenv("DISCORD_TOKEN"))
