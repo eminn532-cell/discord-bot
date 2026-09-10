@@ -11,11 +11,11 @@ intents.guilds = True
 intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# --- ADMIN ID (Kendi Discord ID'ni yaz!) ---
-ADMIN_ID = 1532403639115845742  # BURAYA KENDİ ID'NI YAZ!
+# --- ADMIN ID ---
+ADMIN_ID = 1532403639115845742
 
 # --- İZİN VERİLEN SUNUCU ID ---
-IZINLI_SUNUCU_ID = 1532403639115845742  # YENİ SUNUCU ID
+IZINLI_SUNUCU_ID = 1532403639115845742
 
 # --- DOSYA ADI OLUŞTUR ---
 def dosya_adi_olustur(site):
@@ -25,9 +25,8 @@ def dosya_adi_olustur(site):
 
 # --- SUNUCU KONTROL ---
 def sunucu_kontrol(ctx):
-    """Bot sadece izin verilen sunucuda çalışır"""
     if ctx.guild is None:
-        return True  # DM'den gelen komutlara izin ver
+        return True
     return ctx.guild.id == IZINLI_SUNUCU_ID
 
 # --- BOT BAŞLADI ---
@@ -35,29 +34,15 @@ def sunucu_kontrol(ctx):
 async def on_ready():
     print(f'✅ Bot hazır! {bot.user}')
     print(f'📊 {len(bot.guilds)} sunucuda aktif')
-    print(f'🔒 İzin verilen sunucu ID: {IZINLI_SUNUCU_ID}')
-    
-    # İzin verilmeyen sunuculardan çık
-    for guild in bot.guilds:
-        if guild.id != IZINLI_SUNUCU_ID:
-            await guild.leave()
-            print(f'🚪 {guild.name} sunucusundan çıkıldı!')
 
 # --- YENİ SUNUCUYA EKLENİNCE ---
 @bot.event
 async def on_guild_join(guild):
-    """Bot yeni sunucuya eklenince kontrol et"""
     if guild.id != IZINLI_SUNUCU_ID:
         await guild.leave()
-        print(f'🚪 {guild.name} sunucusundan çıkıldı! (İzinsiz)')
-        
-        # Admin'e bildir
-        admin = await bot.fetch_user(ADMIN_ID)
-        await admin.send(f"🚫 **{guild.name}** sunucusuna eklendim ama izin verilmediği için çıktım!")
 
 # --- KOMUT ÖNCESİ KONTROL ---
 async def komut_kontrol(ctx):
-    """Her komuttan önce sunucu kontrolü"""
     if not sunucu_kontrol(ctx):
         await ctx.send("❌ Bu bot sadece **belirtilen sunucuda** çalışıyor!")
         return False
@@ -71,40 +56,45 @@ def is_admin(ctx):
 async def admin_dm_gonder(ctx, mesaj):
     admin = await bot.fetch_user(ADMIN_ID)
     await admin.send(mesaj)
-    await ctx.message.delete()
+    try:
+        await ctx.message.delete()
+    except:
+        pass
 
-# --- !hesap_ekle (HER SİTEYE EKLE) ---
+# --- !hesap_ekle (DOSYA VEYA MESAJ İLE) ---
 @bot.command()
 @commands.check(is_admin)
 @commands.check(sunucu_kontrol)
-async def hesap_ekle(ctx, site: str = None, *, hesaplar_metni: str = None):
+async def hesap_ekle(ctx, site: str = None):
     await ctx.message.delete()
     
     if site is None:
-        await admin_dm_gonder(ctx, "❌ **Site belirt!** Örnek: `!hesap_ekle hesap.com.tr`")
-        return
-    
-    if hesaplar_metni is None:
-        await admin_dm_gonder(ctx, "❌ **Hesap yaz!** Komuttan sonraki satıra hesapları yaz.")
+        await admin_dm_gonder(ctx, "❌ **Site belirt!** Örnek: `!hesap_ekle hesap.com.tr` (dosya eki ile)")
         return
     
     dosya = dosya_adi_olustur(site)
+    hesaplar = []
+    
+    # Dosya eki var mı?
+    if ctx.message.attachments:
+        for ek in ctx.message.attachments:
+            if ek.filename.endswith('.txt'):
+                icerik = await ek.read()
+                hesaplar.extend(icerik.decode('utf-8').splitlines())
+    else:
+        # Dosya yoksa, mesajın devamını al (reply ile)
+        await admin_dm_gonder(ctx, "❌ **Dosya eklemelisin!** Komutu yazarken bir `.txt` dosyası ekle.")
+        return
+    
+    hesaplar = [h.strip() for h in hesaplar if h.strip()]
+    
+    if not hesaplar:
+        await admin_dm_gonder(ctx, "❌ Geçerli hesap bulunamadı!")
+        return
     
     if not os.path.exists(dosya):
         with open(dosya, 'w', encoding='utf-8') as f:
             f.write("")
-    
-    satirlar = hesaplar_metni.split('\n')
-    hesaplar = []
-    for satir in satirlar:
-        satir = satir.strip()
-        if not satir:
-            continue
-        hesaplar.append(satir)
-    
-    if not hesaplar:
-        await admin_dm_gonder(ctx, f"❌ Geçerli hesap bulunamadı!")
-        return
     
     with open(dosya, 'a', encoding='utf-8') as f:
         for hesap in hesaplar:
@@ -112,7 +102,7 @@ async def hesap_ekle(ctx, site: str = None, *, hesaplar_metni: str = None):
     
     await admin_dm_gonder(ctx, f"✅ **{len(hesaplar)}** hesap **{site}** dosyasına eklendi!")
 
-# --- !hesap_sil (TEK HESAP SİL) ---
+# --- !hesap_sil ---
 @bot.command()
 @commands.check(is_admin)
 @commands.check(sunucu_kontrol)
@@ -148,7 +138,7 @@ async def hesap_sil(ctx, site: str = None, email: str = None):
     else:
         await admin_dm_gonder(ctx, f"❌ Bulunamadı: `{email}`")
 
-# --- !hesap_temizle (TÜM HESAPLARI SİL) ---
+# --- !hesap_temizle ---
 @bot.command()
 @commands.check(is_admin)
 @commands.check(sunucu_kontrol)
@@ -179,7 +169,7 @@ async def hesap_temizle(ctx, site: str = None):
     
     await admin_dm_gonder(ctx, f"🗑️ **{hesap_sayisi}** hesap **{site}** dosyasından silindi!")
 
-# --- !hesap_tumunu_sil (TÜM DOSYALARI TEMİZLE) ---
+# --- !hesap_tumunu_sil ---
 @bot.command()
 @commands.check(is_admin)
 @commands.check(sunucu_kontrol)
@@ -209,12 +199,10 @@ async def hesap_tumunu_sil(ctx):
     
     await admin_dm_gonder(ctx, f"🗑️ **TOPLAM {toplam}** hesap silindi!\n\n📁 Silinen dosyalar:\n" + "\n".join(silinen_dosyalar[:10]))
 
-# --- !log (TÜM HESAPLARI DM'YE GÖNDER) ---
+# --- !log ---
 @bot.command()
 @commands.check(sunucu_kontrol)
 async def log(ctx, site: str = None):
-    """!log hesap.com.tr - Tüm hesaplar DM'ye gelir"""
-    
     if not await komut_kontrol(ctx):
         return
     
@@ -239,7 +227,6 @@ async def log(ctx, site: str = None):
     
     try:
         hesap_sayisi = len(hesaplar)
-        
         grup_boyutu = 20
         gruplar = [hesaplar[i:i+grup_boyutu] for i in range(0, len(hesaplar), grup_boyutu)]
         
@@ -266,7 +253,7 @@ async def log(ctx, site: str = None):
     except discord.Forbidden:
         await ctx.send("❌ **DM'lerin kapalı!** Aç ve tekrar dene.")
 
-# --- !hesap_listele (ADMIN) ---
+# --- !hesap_listele ---
 @bot.command()
 @commands.check(is_admin)
 @commands.check(sunucu_kontrol)
@@ -305,7 +292,7 @@ async def hesap_listele(ctx, site: str = None):
         embed.add_field(name="Hesaplar", value=f"```{hesap_listesi}```", inline=False)
         await admin.send(embed=embed)
 
-# --- !hesap_sayi (ADMIN) ---
+# --- !hesap_sayi ---
 @bot.command()
 @commands.check(is_admin)
 @commands.check(sunucu_kontrol)
@@ -328,7 +315,7 @@ async def hesap_sayi(ctx, site: str = None):
     
     await admin_dm_gonder(ctx, f"📊 **{site}** : **{len(hesaplar)}** hesap")
 
-# --- !log_durum (ADMIN - TÜM DOSYALARI GÖSTER) ---
+# --- !log_durum ---
 @bot.command()
 @commands.check(is_admin)
 @commands.check(sunucu_kontrol)
@@ -358,7 +345,7 @@ async def log_durum(ctx):
     admin = await bot.fetch_user(ADMIN_ID)
     await admin.send(embed=embed)
 
-# --- !yardim (HERKESE AÇIK) ---
+# --- !yardim ---
 @bot.command()
 @commands.check(sunucu_kontrol)
 async def yardim(ctx):
@@ -388,7 +375,10 @@ async def yardim(ctx):
 @log_durum.error
 async def admin_hata(ctx, error):
     if isinstance(error, commands.CheckFailure):
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except:
+            pass
 
 # --- BOTU ÇALIŞTIR ---
 bot.run(os.getenv("DISCORD_TOKEN"))
